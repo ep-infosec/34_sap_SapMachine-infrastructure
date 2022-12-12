@@ -1,0 +1,329 @@
+- defaults:
+    name: 'jmc_global'
+    test_default: true
+    allow_concurrent_builds: false
+    trigger: |
+        <org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+            <triggers/>
+        </org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+    platforms: &platforms
+        - linux_x86_64:
+            docker_agent: |
+                agent {{
+                    dockerfile {{
+                        dir "SapMachine-Infrastructure/dockerfiles/jmc/x86_64"
+                        reuseNode true
+                        label "{platform}"
+                    }}
+                }}
+        - macos_x86_64:
+            docker_agent: ''
+        - macos_aarch64:
+            docker_agent: ''
+        - windows_x86_64:
+            docker_agent: ''
+
+- project:
+    name: jmc_builds
+    platform: *platforms
+    jobs:
+        - build-jmc-{platform}
+
+- job-template:
+    name: build-jmc-{platform}
+    defaults: 'jmc_global'
+    description: 'JMC build on {platform}.'
+    project-type: pipeline
+    sandbox: true
+    concurrent: '{allow_concurrent_builds}'
+    properties:
+        - github:
+            url: 'https://github.com/SAP/jmc'
+        - build-discarder:
+            num-to-keep: 50
+            artifact-num-to-keep: 1
+        - raw:
+            xml: '{trigger}'
+    parameters:
+        - string:
+            name: JMC_GIT_REPOSITORY
+            default: 'https://github.com/SAP/jmc'
+            description: 'The Git repository to use.'
+        - string:
+            name: GIT_REF
+            default: 'sap'
+            description: 'The Git tag, branch or commit to build.'
+        - string:
+            name: BUILD_JDK
+            default: '11'
+            description: 'The JDK used to build the JMC'
+        - bool:
+            name: TEST
+            default: '{test_default}'
+            description: 'Run tests.'
+    dsl: |
+        pipeline {{
+            agent {{
+                label "{platform}"
+            }}
+            stages {{
+                stage("Init") {{
+                    steps {{
+                        cleanWs()
+                    }}
+                }}
+                stage("Checkout Infrastructure Repository") {{
+                    steps {{
+                        sh '''#!/bin/bash
+                            set -ex
+                            git init SapMachine-Infrastructure && cd SapMachine-Infrastructure
+                            git fetch --depth 1 https://github.com/SAP/SapMachine-infrastructure.git master
+                            git checkout --detach FETCH_HEAD
+                        '''
+                    }}
+                }}
+                stage("Checkout SapMachine Repository") {{
+                    steps {{
+                        sh '''#!/bin/bash
+                            set -ex
+                            git init jmc && cd jmc
+                            git remote add origin $JMC_GIT_REPOSITORY
+                            git fetch origin $GIT_REF
+                            git checkout --detach FETCH_HEAD
+                        '''
+                    }}
+                }}
+                stage ('Download Prerequisites'){{
+                    {docker_agent}
+                    steps {{
+                        // credentials are needed to avoid rate limit exceedance
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD']]) {{
+                            sh "python3 SapMachine-Infrastructure/lib/download_boot_jdk.py -m ${{params.BUILD_JDK}} -d `pwd`"
+                        }}
+                    }}
+                }}
+                stage("Build and Basic Tests") {{
+                    {docker_agent}
+                    environment {{
+                        BUILD_JDK = "${{WORKSPACE}}/boot_jdk"
+                        JAVA_HOME = "${{WORKSPACE}}/boot_jdk"
+                    }}
+                    steps {{
+                        sh 'SapMachine-Infrastructure/lib/jmc/build.sh'
+                    }}
+                }}
+                stage("Test") {{
+                    {docker_agent}
+                    when {{
+                        expression {{ params.TEST == true }}
+                    }}
+                    environment {{
+                        BUILD_JDK = "${{WORKSPACE}}/boot_jdk"
+                        JAVA_HOME = "${{WORKSPACE}}/boot_jdk"
+                    }}
+                    steps {{
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'UNSTABLE') {{
+                            sh 'SapMachine-Infrastructure/lib/jmc/test.sh'
+                        }}
+                    }}
+                }}
+                stage('Archive') {{
+                    steps {{
+                        script {{
+                            archiveArtifacts allowEmptyArchive: true, artifacts: 'jmc/target/products/*.gz'
+                            archiveArtifacts allowEmptyArchive: true, artifacts: 'jmc/target/products/*.zip'
+                        }}
+                    }}
+                }}
+            }}
+            post {{
+                success {{
+                    cleanWs()
+                }}
+            }}
+        }}
+
+- job:
+    name: build-service-jmc
+    description: 'Start JMC build on all platorms.'
+    project-type: pipeline
+    sandbox: true
+    concurrent: true
+    properties:
+        - build-discarder:
+            days-to-keep: 14
+            artifact-days-to-keep: 7
+    parameters:
+        - string:
+            name: JMC_GIT_REPOSITORY
+            default: 'https://github.com/SAP/jmc'
+            description: 'The Git repository to use.'
+        - string:
+            name: GIT_REF
+            default: 'sap'
+            description: 'The Git tag, branch or commit to build.'
+        - bool:
+            name: BUILD_LINUX_X86_64
+            default: true
+        - bool:
+            name: BUILD_WINDOWS_X86_64
+            default: true
+        - bool:
+            name: BUILD_MACOS_X86_64
+            default: true
+        - bool:
+            name: BUILD_MACOS_ARM_64
+            default: true
+        - string:
+            name: BUILD_JDK
+            default: '11'
+            description: 'The JDK used to build the JMC'
+        - bool:
+            name: TEST
+            default: true
+            description: 'Run tests.'
+    dsl: |
+        pipeline {
+            agent {
+                label 'build_service'
+            }
+            stages {
+                stage('Trigger Builds') {
+                    parallel {
+                        stage('Linux x86 64') {
+                            when {
+                                expression { params.BUILD_LINUX_X86_64 == true }
+                            }
+                            steps {
+                                script {
+                                    def job_linux_x86_64 = build job: 'build-jmc-linux_x86_64', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'JMC_GIT_REPOSITORY', value: params.JMC_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'BUILD_JDK', value: params.BUILD_JDK),
+                                        [$class: 'BooleanParameterValue', name: 'TEST', value: params.TEST]
+                                    ]
+                                }
+                            }
+                        }
+                        stage('macOS aarch 64') {
+                            when {
+                                expression { params.BUILD_MACOS_ARM_64 == true }
+                            }
+                            steps {
+                                script {
+                                    def job_macos_aarch64 = build job: 'build-jmc-macos_aarch64', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'JMC_GIT_REPOSITORY', value: params.JMC_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'BUILD_JDK', value: params.BUILD_JDK),
+                                        [$class: 'BooleanParameterValue', name: 'TEST', value: params.TEST]
+                                    ]
+                                }
+                            }
+                        }
+                        stage('macOS x86 64') {
+                            when {
+                                expression { params.BUILD_MACOS_X86_64 == true }
+                            }
+                            steps {
+                                script {
+                                    def job_macos_x86_64 = build job: 'build-jmc-macos_x86_64', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'JMC_GIT_REPOSITORY', value: params.JMC_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'BUILD_JDK', value: params.BUILD_JDK),
+                                        [$class: 'BooleanParameterValue', name: 'TEST', value: params.TEST]
+                                    ]
+                                }
+                            }
+                        }
+                        stage('Windows x86 64') {
+                            when {
+                                expression { params.BUILD_WINDOWS_X86_64 == true }
+                            }
+                            steps {
+                                script {
+                                    def job_windows_x86_64 = build job: 'build-jmc-windows_x86_64', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'JMC_GIT_REPOSITORY', value: params.JMC_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'BUILD_JDK', value: params.BUILD_JDK),
+                                        [$class: 'BooleanParameterValue', name: 'TEST', value: params.TEST]
+                                    ]
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+- job:
+    name: jmc-repository-update
+    description: 'Update JMC repository from OpenJDK upstream and create merge PRs.'
+    project-type: pipeline
+    sandbox: true
+    concurrent: false
+    properties:
+        - build-discarder:
+            num-to-keep: 60
+    parameters:
+        - bool:
+            name: UPDATE_REPOSITORY
+            default: true
+            description: 'Update JMC repository from OpenJDK.'
+        - bool:
+            name: MERGE_UPSTREAM
+            default: true
+            description: 'Create merge PRs.'
+    triggers:
+        - timed: "H 23 * * 3"
+    dsl: |
+        pipeline {
+            agent {
+                label "repository"
+            }
+            stages {
+                stage("Init") {
+                    steps {
+                        cleanWs()
+                    }
+                }
+                stage("Checkout Infrastructure Repository") {
+                    steps {
+                        sh '''#!/bin/bash
+                            set -ex
+                            git init SapMachine-Infrastructure && cd SapMachine-Infrastructure
+                            git fetch --depth 1 https://github.com/SAP/SapMachine-infrastructure.git master
+                            git checkout --detach FETCH_HEAD
+                        '''
+                    }
+                }
+                stage("Checkout SapMachine JMC Repository") {
+                    steps {
+                        sh "git clone https://github.com/SAP/jmc.git jmc"
+                    }
+                }
+                stage('Update SapMachine JMC Repository') {
+                    when {
+                        expression { params.UPDATE_REPOSITORY == true }
+                    }
+                    steps {
+                        withCredentials([usernamePassword(credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD')]) {
+                            sh "SapMachine-Infrastructure/lib/jmc/update_repo.sh"
+                        }
+                    }
+                }
+                stage("Merge from Upstream") {
+                    when {
+                        expression { params.MERGE_UPSTREAM == true }
+                    }
+                    steps {
+                        withCredentials([usernamePassword(credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD')]) {
+                            sh "cd jmc && python3 ../SapMachine-Infrastructure/lib/jmc/merge_from_upstream.py"
+                        }
+                    }
+                }
+            }
+        }

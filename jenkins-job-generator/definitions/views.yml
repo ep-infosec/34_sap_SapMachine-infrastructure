@@ -1,0 +1,106 @@
+- view:
+    name: 'Snapshot Builds'
+    description: 'Snapshot Builds'
+    view-type: list
+    regex: 'build-[\d]+-snapshot-.*$|build-service-snapshot-[\d]+$'
+
+- view:
+    name: 'Release Builds'
+    description: 'Release Builds'
+    view-type: list
+    regex: 'build-[\d]+-release-.*$|build-service-release-[\d]+$'
+
+- view:
+    name: 'Pull Request Validation Builds '
+    description: 'Pull Request Validation Builds'
+    view-type: list
+    regex: 'build-[\d]+-pr-validation-.*$|validate-pr-[\d]+$'
+
+- view:
+    name: 'Linux x86 64 Builds'
+    description: 'Linux x86 64 Builds'
+    view-type: list
+    regex: 'build-.*-linux_x86_64$'
+
+- view:
+    name: 'Linux ppc64le Builds'
+    description: 'Linux ppc64le Builds'
+    view-type: list
+    regex: 'build-.*-linux_ppc64le$'
+
+- view:
+    name: 'Linux aarch64 Builds (Beta)'
+    description: 'Linux aarch64 Builds (Beta)'
+    view-type: list
+    regex: 'build-.*-linux_aarch64$'
+    
+- view:
+    name: 'macOS x86 64 Builds'
+    description: 'macOS x86 64 Builds'
+    view-type: list
+    regex: 'build-.*-macos_x86_64$'
+
+- view:
+    name: 'macOS aarch 64 Builds'
+    description: 'macOS aarch 64 Builds'
+    view-type: list
+    regex: 'build-.*-macos_aarch64$'
+
+- view:
+    name: 'Windows x86 64 Builds'
+    description: 'Windows x86 64 Builds'
+    view-type: list
+    regex: 'build-.*-windows_x86_64$'
+
+- view:
+    name: 'Infrastructure'
+    description: 'Infrastructure related jobs'
+    view-type: list
+    job-name:
+        - async-prof-repo-update
+        - generate-website-data
+        - jenkins-configuration-backup
+        - jenkins-configuration-restore
+        - jenkins-job-generator-trigger
+        - jenkins-job-generator
+        - jtreg
+        - osx-upload
+        - osx-upload-processor
+        - update-cask
+        - repository-update-and-tag
+        - upload-ossrh
+
+- view:
+    name: 'Cloud Foundry Java Buildpack'
+    description: 'Cloud Foundry Java Buildpack jobs'
+    view-type: list
+    job-name:
+        - generate-cf-java-buildpack-data
+        - test-cf-java-buildpack-data
+
+- view:
+    name: 'Docker'
+    description: 'Docker jobs'
+    view-type: list
+    job-name:
+        - docker-manifest
+        - generate-dockerfiles
+
+- view:
+    name: 'Linux Packages'
+    description: 'Linux Package jobs'
+    view-type: list
+    job-name:
+    regex: '(resign-debian-repository-.*|build-debian-package-.*|rpm-package)'
+
+- view:
+    name: 'Async Profiler Builds'
+    description: 'Async Profiler Builds'
+    view-type: list
+    regex: 'build-async-profiler-.*'
+
+- view:
+    name: 'JMC Jobs'
+    description: 'JMC Builds and other JMC related jobs'
+    view-type: list
+    regex: '.*jmc.*'

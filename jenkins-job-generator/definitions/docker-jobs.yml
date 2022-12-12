@@ -1,0 +1,80 @@
+- job:
+    name: docker-manifest
+    description: 'This project is generated. Do not modify manually.'
+    project-type: pipeline
+    concurrent: false
+    properties:
+        - build-discarder:
+            num-to-keep: 100
+    dsl: |
+        pipeline {
+            agent {
+                label "docker"
+            }
+            stages {
+                stage("Checkout Infrastructure Repository") {
+                    steps {
+                        checkout changelog: false, poll: false, scm: [$class: 'GitSCM', branches: [[name: '*/master']], extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'SapMachine-Infrastructure']], userRemoteConfigs: [[credentialsId: 'SapMachine-github', url: 'https://github.com/SAP/SapMachine-infrastructure.git']]]
+                    }
+                }
+                stage('Generate Manifest') {
+                    agent {
+                        dockerfile {
+                            dir "SapMachine-Infrastructure/dockerfiles/infrastructure"
+                            reuseNode true
+                            label "docker"
+                        }
+                    }
+                    steps {
+                        sh "cd SapMachine-Infrastructure && python3 lib/make_docker_manifest.py -d dockerfiles/official -m ../sapmachine.manifest"
+                        archiveArtifacts 'sapmachine.manifest'
+                    }
+                }
+            }
+            post {
+                cleanup {
+                    cleanWs deleteDirs: true, disableDeferredWipeout: true
+                }
+            }
+        }
+
+- job:
+    name: generate-dockerfiles
+    description: 'This project is generated. Do not modify manually.'
+    project-type: pipeline
+    concurrent: false
+    properties:
+        - build-discarder:
+            num-to-keep: 100
+    dsl: |
+        pipeline {
+            agent {
+                label "docker"
+            }
+            stages {
+                stage("Checkout Infrastructure Repository") {
+                    steps {
+                        checkout changelog: false, poll: false, scm: [$class: 'GitSCM', branches: [[name: '*/master']], extensions: [[$class: 'RelativeTargetDirectory', relativeTargetDir: 'SapMachine-Infrastructure']], userRemoteConfigs: [[credentialsId: 'SapMachine-github', url: 'https://github.com/SAP/SapMachine-infrastructure.git']]]
+                    }
+                }
+                stage('Generate Dockerfiles') {
+                    agent {
+                        dockerfile {
+                            dir "SapMachine-Infrastructure/dockerfiles/infrastructure"
+                            reuseNode true
+                            label "docker"
+                        }
+                    }
+                    steps {
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD']]) {
+                            sh "cd SapMachine-Infrastructure && python3 lib/generate_dockerfiles.py"
+                        }
+                    }
+                }
+            }
+            post {
+                cleanup {
+                    cleanWs deleteDirs: true, disableDeferredWipeout: true
+                }
+            }
+        }

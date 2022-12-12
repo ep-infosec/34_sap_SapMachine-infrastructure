@@ -1,0 +1,1031 @@
+- defaults:
+    name: 'sapmachine_global'
+    build_alpine: true
+    publish_default: false
+    release_default: false
+    docker_agent: ''
+    architecture: ''
+    debarch: ''
+    extra_configure_options: ''
+    extra_configure_options_pr: ''
+    windows_devkit: ''
+    trigger: |
+        <org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+            <triggers/>
+        </org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+    majors: &majors
+        - '11':
+           branch_name: sapmachine11
+           build_alpine: false
+           windows_devkit: 'io.sapmachine.build.devkit.windows-x64:devkit-vs2017:15.9.49'
+        - '17':
+           branch_name: sapmachine17
+           windows_devkit: 'io.sapmachine.build.devkit.windows-x64:devkit-vs2017:15.9.49'
+        - '19':
+           branch_name: sapmachine19
+           windows_devkit: 'io.sapmachine.build.devkit.windows-x64:devkit-vs2017:15.9.49'
+        - '20':
+           branch_name: sapmachine20
+           windows_devkit: 'io.sapmachine.build.devkit.windows-x64:devkit-vs2019:16.11.13'
+        - '21':
+           branch_name: sapmachine
+           windows_devkit: 'io.sapmachine.build.devkit.windows-x64:devkit-vs2019:16.11.13'
+    platforms: &platforms
+        - linux_aarch64:
+            architecture: linux-aarch64
+            debarch: arm64
+            docker_agent: |
+                agent {{
+                    dockerfile {{
+                        dir "SapMachine-Infrastructure/dockerfiles/ubuntu_20_04/arm64"
+                        reuseNode true
+                        label "{platform}"
+                        additionalBuildArgs '--build-arg ARTIFACTORY_CREDS=\"$ARTIFACTORY_CREDS\"'
+                    }}
+                }}
+            devkit_default: 'io.sapmachine.build.devkit.linux-aarch64:devkit-fedora-gcc:21-8.3.0'
+        - linux_alpine_x86_64:
+            docker_agent: |
+                agent {{
+                    dockerfile {{
+                        dir "SapMachine-Infrastructure/dockerfiles/alpine_3/x86_64"
+                        reuseNode true
+                        label "{platform}"
+                    }}
+                }}
+            devkit_default: ''
+        - linux_ppc64le:
+            architecture: linux-ppc64le
+            debarch: ppc64el
+            docker_agent: |
+                agent {{
+                    dockerfile {{
+                        dir "SapMachine-Infrastructure/dockerfiles/ubuntu_18_04/ppc64le"
+                        reuseNode true
+                        label "{platform}"
+                        additionalBuildArgs '--build-arg ARTIFACTORY_CREDS=\"$ARTIFACTORY_CREDS\"'
+                    }}
+                }}
+            devkit_default: 'io.sapmachine.build.devkit.linux-ppc64le:devkit-rhel-gcc:7-8.3.0'
+        - linux_x86_64:
+            architecture: linux-x64
+            debarch: amd64
+            docker_agent: |
+                agent {{
+                    dockerfile {{
+                        dir "SapMachine-Infrastructure/dockerfiles/ubuntu_18_04/x86_64"
+                        reuseNode true
+                        label "{platform}"
+                        additionalBuildArgs '--build-arg ARTIFACTORY_CREDS=\"$ARTIFACTORY_CREDS\"'
+                    }}
+                }}
+            devkit_default: 'io.sapmachine.build.devkit.linux-x64:devkit-fedora-gcc:12-8.3.0.1'
+        - macos_x86_64:
+            devkit_default: 'io.sapmachine.build.devkit.macos:devkit-xcode:13.1'
+        - macos_aarch64:
+            devkit_default: 'io.sapmachine.build.devkit.macos:devkit-xcode:13.1'
+        - windows_x86_64:
+            devkit_default: '{windows_devkit}'
+    build_types: &build_types
+        - snapshot
+        - release
+        - pr-validation:
+            extra_configure_options_pr: '--with-debug-level=fastdebug'
+            trigger: |
+                <org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+                    <triggers>
+                        <org.jenkinsci.plugins.github.pullrequest.GitHubPRTrigger plugin="github-pullrequest@0.2.4">
+                            <spec>H/1 * * * *</spec>
+                            <triggerMode>HEAVY_HOOKS</triggerMode>
+                            <cancelQueued>true</cancelQueued>
+                            <abortRunning>false</abortRunning>
+                            <skipFirstRun>false</skipFirstRun>
+                            <repoProviders>
+                                <com.github.kostyasha.github.integration.generic.repoprovider.GitHubPluginRepoProvider>
+                                <cacheConnection>true</cacheConnection>
+                                <manageHooks>true</manageHooks>
+                                <repoPermission>ADMIN</repoPermission>
+                                </com.github.kostyasha.github.integration.generic.repoprovider.GitHubPluginRepoProvider>
+                            </repoProviders>
+                            <errorsAction>
+                                <description>GitHub Pull Requests Trigger Errors</description>
+                                <errors class="java.util.Collections$SynchronizedSet" serialization="custom">
+                                <java.util.Collections_-SynchronizedCollection>
+                                    <default>
+                                    <c class="set"/>
+                                    <mutex class="java.util.Collections$SynchronizedSet" reference="../../.."/>
+                                    </default>
+                                </java.util.Collections_-SynchronizedCollection>
+                                </errors>
+                            </errorsAction>
+                            <events>
+                                <org.jenkinsci.plugins.github.pullrequest.events.impl.GitHubPRCommitEvent/>
+                                <org.jenkinsci.plugins.github.pullrequest.events.impl.GitHubPRCommentEvent>
+                                <comment>retest this please</comment>
+                                </org.jenkinsci.plugins.github.pullrequest.events.impl.GitHubPRCommentEvent>
+                                <org.jenkinsci.plugins.github.pullrequest.events.impl.GitHubPROpenEvent/>
+                            </events>
+                            <preStatus>false</preStatus>
+                            <branchRestriction>
+                                <targetBranchList>
+                                <string>{branch_name}</string>
+                                </targetBranchList>
+                            </branchRestriction>
+                        </org.jenkinsci.plugins.github.pullrequest.GitHubPRTrigger>
+                    </triggers>
+                </org.jenkinsci.plugins.workflow.job.properties.PipelineTriggersJobProperty>
+
+- project:
+    name: builds
+    major: *majors
+    build_type: *build_types
+    platform: *platforms
+    exclude:
+        - platform: linux_alpine_x86_64
+          major: '11'
+    jobs:
+        - build-{major}-{build_type}-{platform}
+
+- project:
+    name: service-builds
+    major: *majors
+    build_type:
+        - snapshot
+        - release
+    platform: *platforms
+    jobs:
+        - build-service-{build_type}-{major}
+
+- job-template:
+    name: build-{major}-{build_type}-{platform}
+    defaults: 'sapmachine_global'
+    description: '{build_type} build for SapMachine {major} on {platform}.'
+    project-type: pipeline
+    sandbox: true
+    concurrent: false
+    properties:
+        - github:
+            url: 'https://github.com/SAP/SapMachine'
+        - build-discarder:
+            num-to-keep: 20
+            artifact-num-to-keep: 1
+        - raw:
+            xml: '{trigger}'
+    parameters:
+        - string:
+            name: SAPMACHINE_GIT_REPOSITORY
+            default: 'https://github.com/SAP/SapMachine.git'
+            description: 'The Git repository to use.'
+        - string:
+            name: GIT_REF
+            default: '{branch_name}'
+            description: 'The Git tag, branch or commit to build.'
+        - string:
+            name: SAPMACHINE_VERSION
+            default: ''
+            description: 'Either a SapMachine Release Tag or a JDK Major version. If empty, GIT_REF is used.'
+        - string:
+            name: BUILD_NUMBER
+            default: ''
+            description: 'Sets the version build number explicitly.'
+        - string:
+            name: SAPMACHINE_ARCHIVE_NAME_PREFIX
+            default: 'sapmachine{major}-{platform}'
+            description: 'The prefix of the bundle archive.'
+        - string:
+            name: DEVKIT
+            default: '{devkit_default}'
+            description: 'Devkit, could be either a path that locally exists or the GAV coordinates to a tar.gz archive to be downloaded and extracted.'
+        - string:
+            name: EXTRA_CONFIGURE_OPTIONS
+            default: '{extra_configure_options} {extra_configure_options_pr}'
+            description: 'Extra configure options passed directly to configure script.'
+        - string:
+            name: hotspot_test_groups
+            default: ':tier1'
+            description: 'Select the test group for jtreg hotspot tests. Empty means disabled.'
+        - string:
+            name: jdk_test_groups
+            default: ':tier1'
+            description: 'Select the test group for jtreg jdk tests. Empty means disabled.'
+        - string:
+            name: langtools_test_groups
+            default: '"jdk tools lib"'
+            description: 'Select the test group for jtreg langtools tests. Empty means disabled.'
+        - bool:
+            name: RUN_TESTS
+            default: true
+            description: 'enable/disable jtreg runs'
+        - bool:
+            name: PUBLISH
+            default: '{publish_default}'
+            description: 'When set to true, the resulting bundles will be published to GitHub.'
+        - bool:
+            name: RELEASE
+            default: '{release_default}'
+            description: 'When set to true, marks this build as a release build, otherwise as pre-release.'
+    dsl: |
+        pipeline {{
+            agent {{
+                label "{platform}"
+            }}
+            environment {{
+                ARTIFACTORY_CREDS = credentials('openjdk-artifactory')
+            }}
+            stages {{
+                stage("Init") {{
+                    steps {{
+                        script {{
+                            if (JOB_NAME ==~ /((\S*)(pr-validation)(\S*))/) {{
+                                setGitHubPullRequestStatus context: "validate-pr-{major}-{platform}", state: 'PENDING'
+                            }}
+                            env.VERIFICATION_RESULT = "1"
+                            if (params.SAPMACHINE_VERSION.isEmpty()) {{
+                                env.SAPMACHINE_VERSION = params.GIT_REF
+                            }} else {{
+                                env.SAPMACHINE_VERSION = params.SAPMACHINE_VERSION
+                            }}
+                        }}
+                        cleanWs()
+                    }}
+                }}
+                stage("Checkout Infrastructure Repository") {{
+                    steps {{
+                        sh '''#!/bin/bash
+                            set -ex
+                            git init SapMachine-Infrastructure && cd SapMachine-Infrastructure
+                            git fetch --depth 1 https://github.com/SAP/SapMachine-infrastructure.git master
+                            git checkout --detach FETCH_HEAD
+                        '''
+                    }}
+                }}
+                stage("Verify PR") {{
+                    {docker_agent}
+                    steps {{
+                        // credentials are needed to avoid rate limit exceedance in verify_pr.py
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD']]) {{
+                            script {{
+                                if (JOB_NAME ==~ /((\S*)(pr-validation)(\S*))/) {{
+                                    def platform = "{platform}"
+                                    env.COMMENT = ""
+                                    if (platform == 'linux_x86_64') {{
+                                        env.COMMENT = "-c"
+                                    }}
+                                    env.VERIFICATION_RESULT = sh(
+                                        script: "python3 SapMachine-Infrastructure/lib/verify_pr.py -p ${{env.GITHUB_PR_NUMBER}} ${{env.COMMENT}}",
+                                        returnStatus: true
+                                    )
+
+                                    if (env.VERIFICATION_RESULT == "0") {{
+                                        error("Pull Request Verification failed")
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+                stage("Checkout SapMachine Repository") {{
+                    when {{
+                        expression {{ env.VERIFICATION_RESULT != "2" }}
+                    }}
+                    steps {{
+                        sh '''#!/bin/bash
+                            set -ex
+                            git init SapMachine && cd SapMachine
+                            git remote add origin $SAPMACHINE_GIT_REPOSITORY
+                            git fetch origin $GIT_REF
+                            git checkout --detach FETCH_HEAD
+                        '''
+                    }}
+                }}
+                stage('Prepare Devkit') {{
+                    {docker_agent}
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" && !params.DEVKIT.isEmpty() }}
+                    }}
+                    steps {{
+                        script {{
+                            String[] gav = params.DEVKIT.split(":");
+                            if (gav.length == 3) {{
+                                echo "Extracting devkit from GAV coordinates: \"${{params.DEVKIT}}\"."
+                                sh("SapMachine-Infrastructure/lib/deploy-devkit.sh ${{gav[0]}} ${{gav[1]}} ${{gav[2]}}")
+                                env.DEVKIT_PATH = sh (
+                                    script: "cat devkitlocation.txt",
+                                    returnStdout: true
+                                ).trim()
+                            }} else {{
+                                echo "Devkit not in GAV notation, assuming path."
+                                env.DEVKIT_PATH = params.DEVKIT;
+                            }}
+                            echo "Devkit Path: ${{env.DEVKIT_PATH}}"
+                        }}
+                    }}
+                }}
+                stage('Download Prerequisites') {{
+                    {docker_agent}
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" }}
+                    }}
+                    steps {{
+                        // credentials are needed to avoid rate limit exceedance
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD']]) {{
+                            sh "python3 SapMachine-Infrastructure/lib/download_boot_jdk.py -d `pwd`"
+                        }}
+                        sh '''#!/bin/bash
+                            set -ex
+                            git init gtest && cd gtest
+                            git fetch --depth 1 https://github.com/google/googletest.git refs/tags/release-1.8.1
+                            git checkout --detach FETCH_HEAD
+                        '''
+                    }}
+                }}
+                stage("Build") {{
+                    {docker_agent}
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" }}
+                    }}
+                    environment {{
+                        BOOT_JDK = "${{WORKSPACE}}/boot_jdk"
+                    }}
+                    steps {{
+                        sh 'SapMachine-Infrastructure/lib/build.sh'
+                    }}
+                }}
+                stage('Copy JTREG') {{
+                    {docker_agent}
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.RUN_TESTS == true }}
+                    }}
+                    steps {{
+                        sh "python3 SapMachine-Infrastructure/lib/download_jtreg.py"
+                    }}
+                }}
+                stage('Run jtreg hotspot') {{
+                    {docker_agent}
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.RUN_TESTS == true && params.hotspot_test_groups }}
+                    }}
+                    environment {{
+                        TESTSUITE = 'hotspot'
+                    }}
+                    steps {{
+                        sh "bash SapMachine-Infrastructure/lib/run_jtreg.sh -l `pwd`/SapMachine -h `pwd`/jtreg/jtreg -s ${{env.TESTSUITE}} ${{params.hotspot_test_groups}} || true"
+                        publishHTML target: [
+                            allowMissing: false,
+                            alwaysLinkToLastBuild: false,
+                            keepAll: true,
+                            reportDir: "test_report_${{env.TESTSUITE}}",
+                            reportFiles: 'JTreport/index.html',
+                            reportName: "JT Report ${{env.TESTSUITE}}"
+                        ]
+                        junit "test_report_${{env.TESTSUITE}}/JTwork/**/*.jtr.xml"
+                        archiveArtifacts allowEmptyArchive: true, artifacts: "test_report_${{env.TESTSUITE}}/JTwork/**/hs_err_pid*.log"
+                    }}
+                }}
+                stage('Run jtreg jdk') {{
+                    {docker_agent}
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.RUN_TESTS == true && params.jdk_test_groups }}
+                    }}
+                    environment {{
+                        TESTSUITE = 'jdk'
+                    }}
+                    steps {{
+                        sh "bash SapMachine-Infrastructure/lib/run_jtreg.sh -l `pwd`/SapMachine -h `pwd`/jtreg/jtreg -s ${{env.TESTSUITE}} ${{params.jdk_test_groups}} || true"
+
+                        publishHTML target: [
+                            allowMissing: false,
+                            alwaysLinkToLastBuild: false,
+                            keepAll: true,
+                            reportDir: "test_report_${{env.TESTSUITE}}",
+                            reportFiles: 'JTreport/index.html',
+                            reportName: "JT Report ${{env.TESTSUITE}}"
+                        ]
+                        junit "test_report_${{env.TESTSUITE}}/JTwork/**/*.jtr.xml"
+                        archiveArtifacts allowEmptyArchive: true, artifacts: "test_report_${{env.TESTSUITE}}/JTwork/**/hs_err_pid*.log"
+                    }}
+                }}
+                stage('Run jtreg langtools') {{
+                    {docker_agent}
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.RUN_TESTS == true && params.langtools_test_groups }}
+                    }}
+                    environment {{
+                        TESTSUITE = 'langtools'
+                    }}
+                    steps {{
+                        sh "bash SapMachine-Infrastructure/lib/run_jtreg.sh -l `pwd`/SapMachine -h `pwd`/jtreg/jtreg -s ${{env.TESTSUITE}} ${{params.langtools_test_groups}} || true"
+
+                        publishHTML target: [
+                            allowMissing: false,
+                            alwaysLinkToLastBuild: false,
+                            keepAll: true,
+                            reportDir: "test_report_${{env.TESTSUITE}}",
+                            reportFiles: 'JTreport/index.html',
+                            reportName: "JT Report ${{env.TESTSUITE}}"
+                        ]
+                        junit "test_report_${{env.TESTSUITE}}/JTwork/**/*.jtr.xml"
+                        archiveArtifacts allowEmptyArchive: true, artifacts: "test_report_${{env.TESTSUITE}}/JTwork/**/hs_err_pid*.log"
+                    }}
+                }}
+                stage('Archive') {{
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" }}
+                    }}
+                    steps {{
+                        archiveArtifacts allowEmptyArchive: true, artifacts: 'test.zip'
+                        archiveArtifacts allowEmptyArchive: true, artifacts: 'support_gensrc.zip'
+                        archiveArtifacts allowEmptyArchive: true, artifacts: '*.dmg'
+
+                        script {{
+                            def jdk_bundle_name = readFile "${{env.WORKSPACE}}/jdk_bundle_name.txt"
+                            def jre_bundle_name = readFile "${{env.WORKSPACE}}/jre_bundle_name.txt"
+                            def symbols_bundle_name = readFile "${{env.WORKSPACE}}/symbols_bundle_name.txt"
+
+                            step ([$class: 'ArtifactArchiver', artifacts: jdk_bundle_name]);
+                            step ([$class: 'ArtifactArchiver', artifacts: jre_bundle_name]);
+                            step ([$class: 'ArtifactArchiver', artifacts: symbols_bundle_name]);
+                        }}
+                    }}
+                }}
+                stage('Build Windows Installer') {{
+                    when {{
+                        expression {{ env.VERIFICATION_RESULT != "2" && JOB_NAME ==~ /((\S*)(windows_x86_64)(\S*))/ }}
+                    }}
+                    steps {{
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD']]) {{
+                            script {{
+                                def jdk_bundle_name = readFile "${{env.WORKSPACE}}/jdk_bundle_name.txt"
+                                def jre_bundle_name = readFile "${{env.WORKSPACE}}/jre_bundle_name.txt"
+                                jdk_bundle_name = jdk_bundle_name.trim()
+                                jre_bundle_name = jre_bundle_name.trim()
+
+                                sh "rm -f *.msi"
+                                sh "python3 SapMachine-Infrastructure/lib/make_msi.py --sapmachine-directory=`pwd`/SapMachine --asset=${{jdk_bundle_name}}"
+                                sh "python3 SapMachine-Infrastructure/lib/make_msi.py --sapmachine-directory=`pwd`/SapMachine --jre --asset=${{jre_bundle_name}}"
+                                archiveArtifacts allowEmptyArchive: true, artifacts: "*.msi"
+                            }}
+                        }}
+                    }}
+                }}
+                stage('Publish GitHub') {{
+                    when {{
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.PUBLISH == true && JOB_NAME ==~ /((\S*)(release)(\S*))/ && !(JOB_NAME ==~ /((\S*)(release-macos)(\S*))/ && params.RELEASE == true) }}
+                    }}
+                    steps {{
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD']]) {{
+                            sh "SapMachine-Infrastructure/lib/publish.sh"
+                            archiveArtifacts allowEmptyArchive: true, artifacts: "*.sha256.txt"
+                        }}
+                    }}
+                }}
+                stage('Create Brew Casks') {{
+                    when {{
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.PUBLISH == true && JOB_NAME ==~ /((\S*)(release-macos)(\S*))/ && params.RELEASE != true }}
+                    }}
+                    steps {{
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD']]) {{
+                            lock('MacBrewCaskGenerationSynchronizer') {{
+                                sh "python3 SapMachine-Infrastructure/lib/make_cask.py -t $SAPMACHINE_VERSION"
+                            }}
+                        }}
+                    }}
+                }}
+                stage('Publish Windows Installer') {{
+                    when {{
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.PUBLISH == true && JOB_NAME ==~ /((\S*)(release-windows_x86_64)(\S*))/ }}
+                    }}
+                    steps {{
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD']]) {{
+                            sh "SapMachine-Infrastructure/lib/publish_msi.sh"
+                        }}
+                    }}
+                }}
+                stage('Publish Website Data') {{
+                    when {{
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.PUBLISH == true && JOB_NAME ==~ /((\S*)(release)(\S*))/}}
+                    }}
+                    steps {{
+                        build job: 'generate-website-data', propagate: false, wait: false
+                    }}
+                }}
+                stage('Publish CF Java Buildpack Data') {{
+                    {docker_agent}
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.PUBLISH == true && params.RELEASE == true && JOB_NAME ==~ /((\S*)(release-linux_x86_64)(\S*))/ }}
+                    }}
+                    steps {{
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD']]) {{
+                            sh "python3 SapMachine-Infrastructure/lib/generate_cf_buildpack_data.py"
+                        }}
+                    }}
+                }}
+                stage('Build Debian Package') {{
+                    {docker_agent}
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.PUBLISH == true && params.RELEASE == true && JOB_NAME ==~ /((\S*)(release-linux)(\S*))/ }}
+                    }}
+                    steps {{
+                        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'SapMachine-github', usernameVariable: 'GIT_USER', passwordVariable: 'GIT_PASSWORD']]) {{
+                            sh "python3 SapMachine-Infrastructure/lib/make_deb.py --tag=${{env.SAPMACHINE_VERSION}} --architecture={architecture}"
+                        }}
+                    }}
+                    post {{
+                        success {{
+                            archiveArtifacts allowEmptyArchive: true, artifacts: "*.deb"
+                            stash includes: '*.deb', name: 'debPackage'
+                            stash includes: 'SapMachine-Infrastructure/**', name: 'infra'
+                        }}
+                    }}
+                }}
+                stage('Publish Debian Package') {{
+                    agent {{
+                        label 'agent-local-docker-ubuntu'
+                    }}
+                    when {{
+                        beforeAgent true
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.PUBLISH == true && params.RELEASE == true && JOB_NAME ==~ /((\S*)(release-linux)(\S*))/ }}
+                    }}
+                    steps {{
+                        unstash 'infra'
+                        unstash 'debPackage'
+                        sh "cp -n *.deb /var/pkg/deb/{debarch} || true"
+                        sh "python3 SapMachine-Infrastructure/lib/recreate_deb_repository.py -s -r /var/pkg/deb/{debarch}"
+                    }}
+                }}
+                stage('Build and Publish RPM Linux Packages') {{
+                    when {{
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.PUBLISH == true && params.RELEASE == true && JOB_NAME ==~ /((\S*)(release-linux_x86_64)(\S*))/ }}
+                    }}
+                    steps {{
+                        build job: 'rpm-package', propagate: false, wait: true, parameters:
+                            [
+                                string(name: 'GIT_TAG_NAME', value: env.SAPMACHINE_VERSION),
+                                [$class: 'BooleanParameterValue', name: 'PUBLISH', value: params.PUBLISH],
+                            ]
+                    }}
+                }}
+                stage('Generate Dockerfiles') {{
+                    when {{
+                        expression {{ env.VERIFICATION_RESULT != "2" && params.PUBLISH == true && params.RELEASE == true && JOB_NAME ==~ /((\S*)(release-linux_x86_64)(\S*))/ }}
+                    }}
+                    steps {{
+                        build job: 'generate-dockerfiles', propagate: false, wait: true
+                    }}
+                }}
+            }}
+            post {{
+                aborted {{
+                    script {{
+                        if (JOB_NAME ==~ /((\S*)(pr-validation)(\S*))/) {{
+                            setGitHubPullRequestStatus context: "validate-pr-{major}-{platform}", state: 'FAILURE', message: 'job aborted'
+                        }}
+                    }}
+                }}
+                failure {{
+                    script {{
+                        if (JOB_NAME ==~ /((\S*)(pr-validation)(\S*))/) {{
+                            setGitHubPullRequestStatus context: "validate-pr-{major}-{platform}", state: 'FAILURE', message: 'build failed'
+                        }}
+                    }}
+                }}
+                unstable {{
+                    script {{
+                        if (JOB_NAME ==~ /((\S*)(pr-validation)(\S*))/) {{
+                            setGitHubPullRequestStatus context: "validate-pr-{major}-{platform}", state: 'FAILURE', message: 'tests failed'
+                        }}
+                    }}
+                }}
+                success {{
+                    script {{
+                        if (JOB_NAME ==~ /((\S*)(pr-validation)(\S*))/) {{
+                            setGitHubPullRequestStatus context: "validate-pr-{major}-{platform}", state: 'SUCCESS'
+                        }}
+                    }}
+                    cleanWs()
+                }}
+                unsuccessful {{
+                    script {{
+                        if ((JOB_NAME ==~ /((\S*)(windows_x86_64)(\S*))/) || (JOB_NAME ==~ /((\S*)(linux_x86_64)(\S*))/)) {{
+                            sh 'zip -rq workspace.zip .'
+                            archiveArtifacts allowEmptyArchive: true, artifacts: 'workspace.zip'
+                        }}
+                    }}
+                }}
+            }}
+        }}
+
+- job-template:
+    name: build-service-{build_type}-{major}
+    defaults: 'sapmachine_global'
+    description: 'Start {build_type} build for SapMachine {major} on all platorms.'
+    project-type: pipeline
+    sandbox: true
+    concurrent: true
+    properties:
+        - build-discarder:
+            days-to-keep: 14
+            artifact-days-to-keep: 7
+    parameters:
+        - string:
+            name: SAPMACHINE_GIT_REPOSITORY
+            default: 'https://github.com/SAP/SapMachine.git'
+            description: 'The Git repository to use.'
+        - string:
+            name: GIT_REF
+            default: '{branch_name}'
+            description: 'The Git tag, branch or commit to build.'
+        - string:
+            name: SAPMACHINE_VERSION
+            default: ''
+            description: 'Either a SapMachine Release Tag or a JDK Major version. If empty, GIT_REF is used.'
+        - string:
+            name: BUILD_NUMBER
+            default: ''
+            description: 'Sets the version build number explicitely.'
+        - bool:
+            name: BUILD_LINUX_X86_64
+            default: true
+        - bool:
+            name: BUILD_LINUX_PPC64LE
+            default: true
+        - bool:
+            name: BUILD_LINUX_AARCH64
+            default: true
+        - bool:
+            name: BUILD_LINUX_ALPINE_X86_64
+            default: '{build_alpine}'
+        - bool:
+            name: BUILD_WINDOWS_X86_64
+            default: true
+        - bool:
+            name: BUILD_MACOS_X86_64
+            default: true
+        - bool:
+            name: BUILD_MACOS_ARM_64
+            default: true
+        - bool:
+            name: RUN_TESTS
+            default: true
+            description: 'enable/disable jtreg runs'
+        - bool:
+            name: PUBLISH
+            default: '{publish_default}'
+            description: 'When set to true, the resulting bundles will be published to GitHub. (Only used in release builds!)'
+        - bool:
+            name: RELEASE
+            default: '{release_default}'
+            description: 'When set to true, marks this build as a release build, otherwise as pre-release. (Only used in release builds!)'
+        - string:
+            name: hotspot_test_groups
+            default: ':tier1'
+            description: 'Select the test group for jtreg hotspot tests. Empty means disabled.'
+        - string:
+            name: jdk_test_groups
+            default: ':tier1'
+            description: 'Select the test group for jtreg jdk tests. Empty means disabled.'
+        - string:
+            name: langtools_test_groups
+            default: '"jdk tools lib"'
+            description: 'Select the test group for jtreg langtools tests. Empty means disabled.'
+    dsl: |
+        pipeline {{
+            agent {{
+                label 'build_service'
+            }}
+            stages {{
+                stage('Trigger Builds') {{
+                    parallel {{
+                        stage('Linux x86 64') {{
+                            when {{
+                                expression {{ params.BUILD_LINUX_X86_64 == true }}
+                            }}
+                            steps {{
+                                script {{
+                                    def job_linux_x86_64 = build job: 'build-{major}-{build_type}-linux_x86_64', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'SAPMACHINE_GIT_REPOSITORY', value: params.SAPMACHINE_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'SAPMACHINE_VERSION', value: params.SAPMACHINE_VERSION),
+                                        string(name: 'BUILD_NUMBER', value: params.BUILD_NUMBER),
+                                        string(name: 'hotspot_test_groups', value: params.hotspot_test_groups),
+                                        string(name: 'jdk_test_groups', value: params.jdk_test_groups),
+                                        string(name: 'langtools_test_groups', value: params.langtools_test_groups),
+                                        [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: params.RUN_TESTS],
+                                        [$class: 'BooleanParameterValue', name: 'PUBLISH', value: params.PUBLISH],
+                                        [$class: 'BooleanParameterValue', name: 'RELEASE', value: params.RELEASE]
+                                    ]
+
+                                    Integer jobnum = job_linux_x86_64.getNumber()
+                                    env.LINUX_X86_64_JOB_ID = jobnum.toString()
+                                    env.LINUX_X86_64_ARTIFACT_DIR = 'linux_x86_64_' + env.BUILD_NUMBER
+
+                                    sh "mkdir -p ${{WORKSPACE}}/${{LINUX_X86_64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                            post {{
+                                success {{
+                                    copyArtifacts filter: 'sapmachine-*.tar.gz', projectName: 'build-{major}-{build_type}-linux_x86_64', target: env.LINUX_X86_64_ARTIFACT_DIR, selector:
+                                    [
+                                        $class: 'SpecificBuildSelector',
+                                        buildNumber: env.LINUX_X86_64_JOB_ID
+                                    ]
+
+                                    script {{
+                                        def artifacts_selector = env.LINUX_X86_64_ARTIFACT_DIR + "/*.tar.gz"
+                                        step ([$class: 'ArtifactArchiver', artifacts: artifacts_selector]);
+                                    }}
+
+                                    sh "rm -rf ${{WORKSPACE}}/${{LINUX_X86_64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                        }}
+                        stage('Linux ppc64le') {{
+                            when {{
+                                expression {{ params.BUILD_LINUX_PPC64LE == true }}
+                            }}
+                            steps {{
+                                script {{
+                                    def job_linux_ppc64le = build job: 'build-{major}-{build_type}-linux_ppc64le', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'SAPMACHINE_GIT_REPOSITORY', value: params.SAPMACHINE_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'SAPMACHINE_VERSION', value: params.SAPMACHINE_VERSION),
+                                        string(name: 'BUILD_NUMBER', value: params.BUILD_NUMBER),
+                                        string(name: 'hotspot_test_groups', value: params.hotspot_test_groups),
+                                        string(name: 'jdk_test_groups', value: params.jdk_test_groups),
+                                        string(name: 'langtools_test_groups', value: params.langtools_test_groups),
+                                        [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: params.RUN_TESTS],
+                                        [$class: 'BooleanParameterValue', name: 'PUBLISH', value: params.PUBLISH],
+                                        [$class: 'BooleanParameterValue', name: 'RELEASE', value: params.RELEASE]
+                                    ]
+
+                                    Integer jobnum = job_linux_ppc64le.getNumber()
+                                    env.LINUX_PPC64LE_JOB_ID = jobnum.toString()
+                                    env.LINUX_PPC64LE_ARTIFACT_DIR = 'linux_ppc64le_' + env.BUILD_NUMBER
+
+                                    sh "mkdir -p ${{WORKSPACE}}/${{LINUX_PPC64LE_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                            post {{
+                                success {{
+                                    copyArtifacts filter: 'sapmachine-*.tar.gz', projectName: 'build-{major}-{build_type}-linux_ppc64le', target: env.LINUX_PPC64LE_ARTIFACT_DIR, selector:
+                                    [
+                                        $class: 'SpecificBuildSelector',
+                                        buildNumber: env.LINUX_PPC64LE_JOB_ID
+                                    ]
+
+                                    script {{
+                                        def artifacts_selector = env.LINUX_PPC64LE_ARTIFACT_DIR + "/*.tar.gz"
+                                        step ([$class: 'ArtifactArchiver', artifacts: artifacts_selector]);
+                                    }}
+
+                                    sh "rm -rf ${{WORKSPACE}}/${{LINUX_PPC64LE_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                        }}
+                        stage('Linux aarch64') {{
+                            when {{
+                                expression {{ params.BUILD_LINUX_AARCH64 == true }}
+                            }}
+                            steps {{
+                                script {{
+                                    def job_linux_aarch64 = build job: 'build-{major}-{build_type}-linux_aarch64', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'SAPMACHINE_GIT_REPOSITORY', value: params.SAPMACHINE_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'SAPMACHINE_VERSION', value: params.SAPMACHINE_VERSION),
+                                        string(name: 'BUILD_NUMBER', value: params.BUILD_NUMBER),
+                                        string(name: 'hotspot_test_groups', value: params.hotspot_test_groups),
+                                        string(name: 'jdk_test_groups', value: params.jdk_test_groups),
+                                        string(name: 'langtools_test_groups', value: params.langtools_test_groups),
+                                        [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: params.RUN_TESTS],
+                                        [$class: 'BooleanParameterValue', name: 'PUBLISH', value: params.PUBLISH],
+                                        [$class: 'BooleanParameterValue', name: 'RELEASE', value: params.RELEASE]
+                                    ]
+
+                                    Integer jobnum = job_linux_aarch64.getNumber()
+                                    env.LINUX_AARCH64_JOB_ID = jobnum.toString()
+                                    env.LINUX_AARCH64_ARTIFACT_DIR = 'linux_aarch64_' + env.BUILD_NUMBER
+
+                                    sh "mkdir -p ${{WORKSPACE}}/${{LINUX_AARCH64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                            post {{
+                                success {{
+                                    copyArtifacts filter: 'sapmachine-*.tar.gz', projectName: 'build-{major}-{build_type}-linux_aarch64', target: env.LINUX_AARCH64_ARTIFACT_DIR, selector:
+                                    [
+                                        $class: 'SpecificBuildSelector',
+                                        buildNumber: env.LINUX_AARCH64_JOB_ID
+                                    ]
+
+                                    script {{
+                                        def artifacts_selector = env.LINUX_AARCH64_ARTIFACT_DIR + "/*.tar.gz"
+                                        step ([$class: 'ArtifactArchiver', artifacts: artifacts_selector]);
+                                    }}
+
+                                    sh "rm -rf ${{WORKSPACE}}/${{LINUX_AARCH64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                        }}
+                        stage('Linux Alpine x86_64') {{
+                            when {{
+                                expression {{ params.BUILD_LINUX_ALPINE_X86_64 == true }}
+                            }}
+                            steps {{
+                                script {{
+                                    def job_linux_alpine_x86_64 = build job: 'build-{major}-{build_type}-linux_alpine_x86_64', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'SAPMACHINE_GIT_REPOSITORY', value: params.SAPMACHINE_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'SAPMACHINE_VERSION', value: params.SAPMACHINE_VERSION),
+                                        string(name: 'BUILD_NUMBER', value: params.BUILD_NUMBER),
+                                        string(name: 'hotspot_test_groups', value: params.hotspot_test_groups),
+                                        string(name: 'jdk_test_groups', value: params.jdk_test_groups),
+                                        string(name: 'langtools_test_groups', value: params.langtools_test_groups),
+                                        [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: params.RUN_TESTS],
+                                        [$class: 'BooleanParameterValue', name: 'PUBLISH', value: params.PUBLISH],
+                                        [$class: 'BooleanParameterValue', name: 'RELEASE', value: params.RELEASE]
+                                    ]
+
+                                    Integer jobnum = job_linux_alpine_x86_64.getNumber()
+                                    env.LINUX_ALPINE_X86_64_JOB_ID = jobnum.toString()
+                                    env.LINUX_ALPINE_X86_64_ARTIFACT_DIR = 'linux_alpine_x86_64_' + env.BUILD_NUMBER
+
+                                    sh "mkdir -p ${{WORKSPACE}}/${{LINUX_ALPINE_X86_64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                            post {{
+                                success {{
+                                    copyArtifacts filter: 'sapmachine-*.tar.gz', projectName: 'build-{major}-{build_type}-linux_alpine_x86_64', target: env.LINUX_ALPINE_X86_64_ARTIFACT_DIR, selector:
+                                    [
+                                        $class: 'SpecificBuildSelector',
+                                        buildNumber: env.LINUX_ALPINE_X86_64_JOB_ID
+                                    ]
+
+                                    script {{
+                                        def artifacts_selector = env.LINUX_ALPINE_X86_64_ARTIFACT_DIR + "/*.tar.gz"
+                                        step ([$class: 'ArtifactArchiver', artifacts: artifacts_selector]);
+                                    }}
+
+                                    sh "rm -rf ${{WORKSPACE}}/${{LINUX_ALPINE_X86_64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                        }}                    
+                        stage('Windows x86 64') {{
+                            when {{
+                                expression {{ params.BUILD_WINDOWS_X86_64 == true }}
+                            }}
+                            steps {{
+                                script {{
+                                    def job_windows_x86_64 = build job: 'build-{major}-{build_type}-windows_x86_64', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'SAPMACHINE_GIT_REPOSITORY', value: params.SAPMACHINE_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'SAPMACHINE_VERSION', value: params.SAPMACHINE_VERSION),
+                                        string(name: 'BUILD_NUMBER', value: params.BUILD_NUMBER),
+                                        string(name: 'hotspot_test_groups', value: params.hotspot_test_groups),
+                                        string(name: 'jdk_test_groups', value: params.jdk_test_groups),
+                                        string(name: 'langtools_test_groups', value: params.langtools_test_groups),
+                                        [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: params.RUN_TESTS],
+                                        [$class: 'BooleanParameterValue', name: 'PUBLISH', value: params.PUBLISH],
+                                        [$class: 'BooleanParameterValue', name: 'RELEASE', value: params.RELEASE]
+                                    ]
+
+                                    Integer jobnum = job_windows_x86_64.getNumber()
+                                    env.WINDOWS_X86_64_JOB_ID = jobnum.toString()
+                                    env.WINDOWS_X86_64_ARTIFACT_DIR = 'windows_x86_64_' + env.BUILD_NUMBER
+
+                                    sh "mkdir -p ${{WORKSPACE}}/${{WINDOWS_X86_64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                            post {{
+                                success {{
+                                    copyArtifacts filter: 'sapmachine-*.zip', projectName: 'build-{major}-{build_type}-windows_x86_64', target: env.WINDOWS_X86_64_ARTIFACT_DIR, selector:
+                                    [
+                                        $class: 'SpecificBuildSelector',
+                                        buildNumber: env.WINDOWS_X86_64_JOB_ID
+                                    ]
+
+                                    script {{
+                                        def artifacts_selector = env.WINDOWS_X86_64_ARTIFACT_DIR + "/*.zip"
+                                        step ([$class: 'ArtifactArchiver', artifacts: artifacts_selector]);
+                                    }}
+
+                                    copyArtifacts filter: 'sapmachine-*.msi', projectName: 'build-{major}-{build_type}-windows_x86_64', target: env.WINDOWS_X86_64_ARTIFACT_DIR, selector:
+                                    [
+                                        $class: 'SpecificBuildSelector',
+                                        buildNumber: env.WINDOWS_X86_64_JOB_ID
+                                    ]
+
+                                    script {{
+                                        def artifacts_selector = env.WINDOWS_X86_64_ARTIFACT_DIR + "/*.msi"
+                                        step ([$class: 'ArtifactArchiver', artifacts: artifacts_selector]);
+                                    }}
+
+                                    sh "rm -rf ${{WORKSPACE}}/${{WINDOWS_X86_64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                        }}
+                        stage('macOS x86 64') {{
+                            when {{
+                                expression {{ params.BUILD_MACOS_X86_64 == true }}
+                            }}
+                            steps {{
+                                script {{
+                                    def job_macos_x86_64 = build job: 'build-{major}-{build_type}-macos_x86_64', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'SAPMACHINE_GIT_REPOSITORY', value: params.SAPMACHINE_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'SAPMACHINE_VERSION', value: params.SAPMACHINE_VERSION),
+                                        string(name: 'BUILD_NUMBER', value: params.BUILD_NUMBER),
+                                        string(name: 'hotspot_test_groups', value: params.hotspot_test_groups),
+                                        string(name: 'jdk_test_groups', value: params.jdk_test_groups),
+                                        string(name: 'langtools_test_groups', value: params.langtools_test_groups),
+                                        [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: params.RUN_TESTS],
+                                        [$class: 'BooleanParameterValue', name: 'PUBLISH', value: params.PUBLISH],
+                                        [$class: 'BooleanParameterValue', name: 'RELEASE', value: params.RELEASE]
+                                    ]
+
+                                    Integer jobnum = job_macos_x86_64.getNumber()
+                                    env.MACOS_X86_64_JOB_ID = jobnum.toString()
+                                    env.MACOS_X86_64_ARTIFACT_DIR = 'macos_x86_64_' + env.BUILD_NUMBER
+
+                                    sh "mkdir -p ${{WORKSPACE}}/${{MACOS_X86_64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                            post {{
+                                success {{
+                                    copyArtifacts filter: 'sapmachine-*.tar.gz', projectName: 'build-{major}-{build_type}-macos_x86_64', target: env.MACOS_X86_64_ARTIFACT_DIR, selector:
+                                    [
+                                        $class: 'SpecificBuildSelector',
+                                        buildNumber: env.MACOS_X86_64_JOB_ID
+                                    ]
+
+                                    script {{
+                                        def artifacts_selector = env.MACOS_X86_64_ARTIFACT_DIR + "/*.tar.gz"
+                                        step ([$class: 'ArtifactArchiver', artifacts: artifacts_selector]);
+                                    }}
+
+                                    sh "rm -rf ${{WORKSPACE}}/${{MACOS_X86_64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                        }}
+                        stage('macOS aarch 64') {{
+                            when {{
+                                expression {{ params.BUILD_MACOS_ARM_64 == true }}
+                            }}
+                            steps {{
+                                script {{
+                                    def job_macos_aarch64 = build job: 'build-{major}-{build_type}-macos_aarch64', propagate: false, wait: true, parameters:
+                                    [
+                                        string(name: 'SAPMACHINE_GIT_REPOSITORY', value: params.SAPMACHINE_GIT_REPOSITORY),
+                                        string(name: 'GIT_REF', value: params.GIT_REF),
+                                        string(name: 'SAPMACHINE_VERSION', value: params.SAPMACHINE_VERSION),
+                                        string(name: 'BUILD_NUMBER', value: params.BUILD_NUMBER),
+                                        string(name: 'hotspot_test_groups', value: params.hotspot_test_groups),
+                                        string(name: 'jdk_test_groups', value: params.jdk_test_groups),
+                                        string(name: 'langtools_test_groups', value: params.langtools_test_groups),
+                                        [$class: 'BooleanParameterValue', name: 'RUN_TESTS', value: params.RUN_TESTS],
+                                        [$class: 'BooleanParameterValue', name: 'PUBLISH', value: params.PUBLISH],
+                                        [$class: 'BooleanParameterValue', name: 'RELEASE', value: params.RELEASE]
+                                    ]
+
+                                    Integer jobnum = job_macos_aarch64.getNumber()
+                                    env.MACOS_ARM_64_JOB_ID = jobnum.toString()
+                                    env.MACOS_ARM_64_ARTIFACT_DIR = 'macos_aarch64_' + env.BUILD_NUMBER
+
+                                    sh "mkdir -p ${{WORKSPACE}}/${{MACOS_ARM_64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                            post {{
+                                success {{
+                                    copyArtifacts filter: 'sapmachine-*.tar.gz', projectName: 'build-{major}-{build_type}-macos_aarch64', target: env.MACOS_ARM_64_ARTIFACT_DIR, selector:
+                                    [
+                                        $class: 'SpecificBuildSelector',
+                                        buildNumber: env.MACOS_ARM_64_JOB_ID
+                                    ]
+
+                                    script {{
+                                        def artifacts_selector = env.MACOS_ARM_64_ARTIFACT_DIR + "/*.tar.gz"
+                                        step ([$class: 'ArtifactArchiver', artifacts: artifacts_selector]);
+                                    }}
+
+                                    sh "rm -rf ${{WORKSPACE}}/${{MACOS_ARM_64_ARTIFACT_DIR}}"
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+            }}
+        }}
